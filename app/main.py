@@ -1,5 +1,9 @@
-import uuid
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+import uuid
+
 from app.models import DocumentUpload, QueryRequest, QueryResponse
 from app.services import vector_service
 
@@ -9,23 +13,21 @@ app = FastAPI(
     version="2.0.0"
 )
 
-@app.get("/")
+# Serve the static frontend folder
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
+
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    """Health check endpoint to verify the API is running."""
-    return {"status": "healthy", "service": "ContextCoach API", "vector_db": "Active"}
+    """Serves the frontend dashboard UI."""
+    html_path = Path(__file__).parent / "static" / "index.html"
+    return html_path.read_text(encoding="utf-8")
 
 @app.post("/api/upload", status_code=201)
 def upload_document(doc: DocumentUpload):
-    """
-    Ingests a document, generates vector embeddings, and stores it in ChromaDB.
-    """
     if not doc.content.strip():
         raise HTTPException(status_code=400, detail="Document content cannot be empty.")
     
-    # Generate a unique ID for the document chunk
     doc_id = str(uuid.uuid4())
-    
-    # Store in ChromaDB
     vector_service.add_document(doc_id=doc_id, title=doc.title, content=doc.content)
     
     return {
@@ -36,9 +38,6 @@ def upload_document(doc: DocumentUpload):
 
 @app.post("/api/chat", response_model=QueryResponse)
 def chat_with_coach(query: QueryRequest):
-    """
-    Performs a true RAG vector search against ChromaDB and returns a structured coaching response.
-    """
     search_results = vector_service.query_similar(query_text=query.question)
     
     if not search_results["contexts"]:
@@ -48,7 +47,7 @@ def chat_with_coach(query: QueryRequest):
         )
     
     matched_contexts = search_results["contexts"]
-    relevant_sources = list(set(search_results["sources"])) # Deduplicate sources
+    relevant_sources = list(set(search_results["sources"]))
 
     simulated_answer = (
         f"Based on semantic vector search (Sources: {', '.join(relevant_sources)}), here is your coaching insight: "

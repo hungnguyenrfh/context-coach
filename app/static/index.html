@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContextCoach - AI RAG Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center py-10 px-4">
+
+    <div class="w-full max-w-4xl">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold tracking-tight text-indigo-400">ContextCoach Dashboard</h1>
+            <p class="text-sm text-gray-400 mt-1">Upload personal notes to your vector database and chat with your RAG backend.</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Upload Panel -->
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">1. Upload Note</h2>
+                <form id="uploadForm" class="flex flex-col gap-4 flex-grow">
+                    <div>
+                        <label class="block text-xs uppercase font-medium text-gray-400 mb-1">Document Title</label>
+                        <input type="text" id="docTitle" required placeholder="e.g., Q3 Productivity Plan" 
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="flex-grow flex flex-col">
+                        <label class="block text-xs uppercase font-medium text-gray-400 mb-1">Content / Notes</label>
+                        <textarea id="docContent" required placeholder="Paste your notes or strategy here..." rows="6"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 resize-none flex-grow"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-lg transition text-sm">
+                        Embed & Index Note
+                    </button>
+                </form>
+                <div id="uploadStatus" class="mt-3 text-xs text-center h-4"></div>
+            </div>
+
+            <!-- Chat / Query Panel -->
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex flex-col">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-300">2. Chat with Coach</h2>
+                <div class="flex flex-col gap-4 flex-grow">
+                    <div>
+                        <label class="block text-xs uppercase font-medium text-gray-400 mb-1">Ask a Question</label>
+                        <input type="text" id="queryQuestion" placeholder="e.g., What is my Q3 plan?" 
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <button id="queryBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 rounded-lg transition text-sm">
+                        Query RAG Backend
+                    </button>
+                    
+                    <div class="mt-2 flex-grow flex flex-col">
+                        <label class="block text-xs uppercase font-medium text-gray-400 mb-1">Response & Sources</label>
+                        <div id="chatResponse" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-300 h-40 overflow-y-auto whitespace-pre-wrap">
+                            <span class="text-gray-500 italic">Awaiting your query...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Frontend Scripting -->
+    <script>
+        const API_BASE = "http://127.0.0.1:8000";
+
+        // Handle Note Upload
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('docTitle').value;
+            const content = document.getElementById('docContent').value;
+            const statusEl = document.getElementById('uploadStatus');
+
+            statusEl.textContent = "Embedding into ChromaDB...";
+            statusEl.className = "mt-3 text-xs text-center h-4 text-yellow-400";
+
+            try {
+                const res = await fetch(`${API_BASE}/api/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+                if (res.ok) {
+                    statusEl.textContent = "Success! Note embedded and stored persistently.";
+                    statusEl.className = "mt-3 text-xs text-center h-4 text-emerald-400";
+                    document.getElementById('docTitle').value = '';
+                    document.getElementById('docContent').value = '';
+                } else {
+                    throw new Error("Upload failed");
+                }
+            } catch (err) {
+                statusEl.textContent = "Error connecting to FastAPI backend.";
+                statusEl.className = "mt-3 text-xs text-center h-4 text-red-400";
+            }
+        });
+
+        // Handle RAG Chat Query
+        document.getElementById('queryBtn').addEventListener('click', async () => {
+            const question = document.getElementById('queryQuestion').value;
+            const responseBox = document.getElementById('chatResponse');
+
+            if (!question.trim()) return;
+
+            responseBox.innerHTML = '<span class="text-yellow-400 italic">Searching vector space...</span>';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await res.json();
+                
+                let html = `<p class="mb-2"><strong>Answer:</strong> ${data.answer}</p>`;
+                if (data.sources && data.sources.length > 0) {
+                    html += `<p class="text-xs text-indigo-400 mt-2"><strong>Sources:</strong> ${data.sources.join(', ')}</p>`;
+                } else {
+                    html += `<p class="text-xs text-gray-500 mt-2">Sources: None found</p>`;
+                }
+                responseBox.innerHTML = html;
+            } catch (err) {
+                responseBox.innerHTML = '<span class="text-red-400">Error retrieving response from backend.</span>';
+            }
+        });
+    </script>
+</body>
+</html>

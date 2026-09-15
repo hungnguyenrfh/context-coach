@@ -1,16 +1,17 @@
 import chromadb
+import os
 from chromadb.utils import embedding_functions
 
 class VectorService:
     def __init__(self):
-        # Initialize a persistent or in-memory Chroma client
-        # Using EphemeralClient keeps it fast and lightweight for local dev/testing
-        self.client = chromadb.EphemeralClient()
+        # Define a local directory path to store database files
+        self.persist_directory = "./chroma_db"
         
-        # Use default sentence-transformer or lightweight default embedding function built into Chroma
+        # Use PersistentClient so data is written to disk
+        self.client = chromadb.PersistentClient(path=self.persist_directory)
+        
         self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
         
-        # Get or create a collection for our coaching documents
         self.collection = self.client.get_or_create_collection(
             name="coaching_docs",
             embedding_function=self.embedding_fn

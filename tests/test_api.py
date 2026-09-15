@@ -4,13 +4,17 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services import vector_service
 
-# Initialize the test client using our FastAPI app instance
 client = TestClient(app)
 
-def teardown_module(module):
-    """Clean up the local persistent chroma_db directory after tests finish."""
-    if os.path.exists(vector_service.persist_directory):
-        shutil.rmtree(vector_service.persist_directory)
+def setup_function(function):
+    """Clear collection data before each test to ensure a clean state."""
+    try:
+        # Clear out existing items in the collection if any exist
+        all_ids = vector_service.collection.get()["ids"]
+        if all_ids:
+            vector_service.collection.delete(ids=all_ids)
+    except Exception:
+        pass
 
 def test_read_root():
     """Test the root health check endpoint and verify vector DB status."""
